@@ -116,8 +116,13 @@ def get_pokemarkers():
 
 
 def get_worker_markers():
+    import db
+    spawn_points = db.get_known_spawnpoints(db.Session())
+    spawn_points = utils.calculate_minimal_pointset(spawn_points)
+
     markers = []
-    points = utils.get_points_per_worker()
+    #points = utils.get_points_per_worker()
+    points = spawn_points
     # Worker start points
     for worker_no, worker_points in enumerate(points):
         coords = utils.get_start_coords(worker_no)

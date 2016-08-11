@@ -310,7 +310,8 @@ def start_worker(worker_no, points):
 
 
 def spawn_workers(workers, status_bar=True):
-    points = utils.get_points_per_worker()
+    spawn_points = db.get_known_spawnpoints(db.Session())
+    points = utils.calculate_minimal_pointset(spawn_points)
     start_date = datetime.now()
     count = config.GRID[0] * config.GRID[1]
     for worker_no in range(count):
