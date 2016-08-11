@@ -145,8 +145,11 @@ def asdf(circles, points):
 def insert_point_into_tree(point, interval):
 
     origin = Point(point['x'], point['y'])
-    lat_begin = distance.distance(meters=-100).destination(origin, 0).latitude
-    lat_end = distance.distance(meters=100).destination(origin, 0).latitude
+
+    # have some margin for rounding
+    offset = config.SCAN_RADIUS + 30
+    lat_begin = distance.distance(meters=-offset).destination(origin, 0).latitude
+    lat_end = distance.distance(meters=offset).destination(origin, 0).latitude
 
     interval[lat_begin:lat_end] = point
     return interval
@@ -275,7 +278,25 @@ def calculate_minimal_pointset(spawn_points):
             new_circles.append({'x':point['x'],'y': point['y']})
             
     print('done, amount circles: ' + str(len(circles)))
-    return [list(map(lambda circle: (circle['x'], circle['y']),circles))]
+
+    points = [[] for _ in range(total_workers)]
+    points = [
+        sort_points_for_worker(p, i)
+        for i, p in enumerate(points)
+    ]
+    points = list(map(lambda circle: (circle['x'], circle['y']),circles))
+
+    # slice list into
+    total_workers = config.GRID[0] * config.GRID[1]
+    n = len(points) / total_workers + 1
+    points = [points[i:i + n] for i in range(0, len(points), n)]
+
+    # and sort the points for each worker
+    points = [
+        sort_points_for_worker(p, i)
+        for i, p in enumerate(points)
+    ]
+    return points
 
 
 
