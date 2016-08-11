@@ -426,3 +426,26 @@ def get_all_spawn_coords(session, pokemon_id=None):
     if config.REPORT_SINCE:
         points = points.filter(Sighting.expire_timestamp > get_since())
     return points.all()
+
+def get_known_spawnpoints(session):
+    query = ('''
+        SELECT lat, lon
+        FROM sightings
+        WHERE
+            lat >= {lat_start} AND 
+            lat <= {lat_end} AND
+            lon >= {lon_start} AND
+            lon <= {lon_end}
+        GROUP BY spawn_id;
+    '''.format(
+        lat_end=config.MAP_START[0],
+        lat_start=config.MAP_END[0],
+        lon_start=config.MAP_START[1],
+        lon_end=config.MAP_END[1]
+    ))
+    query = session.execute(query)
+    results = []
+    for x in query.fetchall():
+        results.append((float(x[0]), float(x[1])))
+    return results
+
