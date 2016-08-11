@@ -73,26 +73,58 @@ def get_gains():
 
 
 
-def map_circle(circle, points):
-    circle['inside'] = list(filter(lambda point: inside_radius(circle, point), points))
-    circle['insideCount'] = len(circle['inside'])
-    return circle
+def map_circle(interval_circle, points):
+    interval_begin = interval_circle[0]
+    interval_end = interval_circle[1]
 
-def map_point(point, circles):
-        point['circles'] = list(filter(lambda circle, point=point: (point in circle['inside']), circles))
-        return point
+    circle = interval_circle[2]
+
+    lat = circle ['x']
+    circle['inside'] = [point[2] for point in points[lat] if inside_radius(circle, point[2])]
+
+    circle['insideCount'] = len(circle['inside'])
+
+    return Interval(interval_begin, interval_end, circle)
+
+def map_point(interval_point, circles):
+    interval_begin = interval_point[0]
+    interval_end = interval_point[1]
+    point = interval_point[2]
+    
+    lat = point['x']
+    point['circles'] = [circle[2] for circle in circles[lat] if inside_radius(circle[2], point)]
+
+    #list(filter(lambda circle, point=point: (point in circle['inside']), circles))
+
+    return Interval(interval_begin, interval_end, point)
 
 def asdf(circles, points):
     newCircles = []
     meh = 0
-    circles = list(map(lambda circle, points=points: map_circle(circle, points), circles))
-    circles = list(filter(lambda circle: circle['insideCount']>0, circles))
+    circles = IntervalTree(map(lambda interval_circle, points=points: map_circle(interval_circle, points), circles))
+    ##circles = list(filter(lambda circle: circle['insideCount']>0, circles))
 
-    points = list(map(lambda point, circles=circles: map_point(point,circles),points))
+    points = IntervalTree(map(lambda point, circles=circles: map_point(point,circles),points))
 
     print('circles generated')
     
-    
+    #for interval_circle in circles:
+    #    intval_begin = interval_circle[0]
+    #    intval_end = interval_circle[1]
+    #    circle = interval_circle[2]
+
+    #    lat = circle['x']
+    #    circle['inside'] = [pt[2] for pt in points[lat] if inside_radius(circle, pt[2])]
+
+    #    # add circle to list of circles which cover the point
+    #    for pt in circle['inside']:
+    #        pt['circles'].append(circle)
+
+    #    # set #points which are in the circle
+    #    circle['insideCount'] = len(circle['inside'])
+
+    #    interval_circle = Interval(intval_begin, intval_end, circle)
+    #    
     return (circles, points)
 
     #for circle in circles:
@@ -111,10 +143,12 @@ def asdf(circles, points):
     #return(newCircles, points)
 
 def insert_point_into_tree(point, interval):
-    origin = Point(point[0], point[1])
-    lat_begin = distance.distance(meters=70).destination(origin, 0).latitude
-    lat_end = distance.distance(meters=-70).destination(origin, 0).latitude
-    interval_of_points[lat_begin:lat_end] = {'x':point[0],'y':point[1], 'covered': False,'circles':[]}
+
+    origin = Point(point['x'], point['y'])
+    lat_begin = distance.distance(meters=-100).destination(origin, 0).latitude
+    lat_end = distance.distance(meters=100).destination(origin, 0).latitude
+
+    interval[lat_begin:lat_end] = point
     return interval
 
 
@@ -122,18 +156,17 @@ def insert_point_into_tree(point, interval):
 def calculate_minimal_pointset(spawn_points):
     points = []
     interval_of_points = IntervalTree()
-    for point in spawn_points:
-        p = {'x':point[0],'y':point[1], 'covered': False,'circles':[]}
-        points.append(p)
-        interval_of_points = insert_point_into_tree(p)
 
-        
+    radius = config.SCAN_RADIUS-5
+    interval_of_circles = IntervalTree()
     import math
     import random
 
-    circles = []
-    radius = config.SCAN_RADIUS-20
     for point in spawn_points:
+        p = {'x':point[0],'y':point[1], 'covered': False,'circles':[]}
+        points.append(p)
+        interval_of_points = insert_point_into_tree(p, interval_of_points)
+
         for i in range(0, config.SAMPLES_PER_POINT):
             r = random.uniform(0,radius)
             bearing = random.uniform(0, 359)
@@ -143,15 +176,41 @@ def calculate_minimal_pointset(spawn_points):
             
             lat2, lon2 = destination.latitude, destination.longitude
 
-
-            #x = point[0] + r * math.cos(fi))
-            #y = point[1] + r * math.sin(fi)
             x = lat2
             y = lon2
-            circles.append({'x':x,'y':y, 'insideCount':0})
+            a_circle = {'x':x,'y':y, 'insideCount':0}
+            dist = distance.distance((x,y), point).meters
+            if dist > 70:
+                print('wtf???')
+            #circles.append(a_circle)
+
+            interval_of_circles = insert_point_into_tree(a_circle, interval_of_circles)
+
+        
+
+    circles = []
+
+    
+    #for point in spawn_points:
+    #    for i in range(0, config.SAMPLES_PER_POINT):
+    #        r = random.uniform(0,radius)
+    #        bearing = random.uniform(0, 359)
+    #        
+    #        origin = Point(point[0], point[1])
+    #        destination = distance.distance(meters=r).destination(origin, bearing)
+    #        
+    #        lat2, lon2 = destination.latitude, destination.longitude
+
+
+    #        #x = point[0] + r * math.cos(fi))
+    #        #y = point[1] + r * math.sin(fi)
+    #        x = lat2
+    #        y = lon2
+    #        circles.append({'x':x,'y':y, 'insideCount':0})
     # done
+
     print('circles generated')
-    foo = asdf(circles, points)
+    foo = asdf(interval_of_circles, interval_of_points)
     print('distances calculated')
     circles = foo[0]
     points = foo[1]
@@ -162,23 +221,30 @@ def calculate_minimal_pointset(spawn_points):
     new_circles = []
     countt = 0
     meh = 0
+    #circles=list(circles)
+    #all_points = list(points)
     while True:
       meh += 1
       # get circle with max insideCount
       #circle = circles[0]
-      circle = max(circles, key=lambda circle: circle['insideCount'])
+      circle = max(circles, key=lambda circle: circle[2]['insideCount'])[2]
       #for i in range(0, len(circles)):
       #    if circle['insideCount'] < circles[i]['insideCount']:
       #        circle = circles[i]
       anything = False
       for point in circle['inside']:
+          #all_points = [pt for pt in spawn_points if pt != point]
+          #for circle in circles:
+          #    circle['inside'] = [pt for pt in spawn_points if pt != point]
+          #    circle['insideCount'] -= 1
+
           if not point['covered']:
               anything = True
               point['covered'] = True
               countt += 1
               
-              for circle in point['circles']:
-                  circle['insideCount'] -= 1
+              for circle_b in point['circles']:
+                  circle_b['insideCount'] -= 1
       #for j in range(0, len(circle['inside'])):
       #   if not circle['inside'][j]['covered']:
       #       anything = True
@@ -189,23 +255,24 @@ def calculate_minimal_pointset(spawn_points):
       #           circle['inside'][j]['circles'][k]['insideCount'] -=1
       if anything:
           new_circles.append(circle)
+      #if not all_points:
+      #    break
       if(countt == len(points)):
           break
-      print(abs(countt-len(points)))
-      if(meh % 1000 == 0):
-          print('meh: ' + str(meh))
     circles = new_circles
-    print('one last check')
-    for point in points:
+
+    # ensure that every point is going to be scanned
+    for interval_point in points:
+        point = interval_point[2]
         inside = False
-        for circle in point['circles']:
-            if distance.distance((point['x'],point['y']), (circle['x'], circle['y'])).meters <= 70:
+        for circle in circles:
+            # if there's a circle which covers the point, we can stop the evaluation for this point
+            if distance.distance((point['x'], point['y']), (circle['x'], circle['y'])).meters <= 70:
                 inside = True
+                break
         if not inside:
-            print('##################################')
-            print('LONELY POINT FOUND:')
-            print(point)
-            print('##################################')
+            print('lonely circle found')
+            new_circles.append({'x':point['x'],'y': point['y']})
             
     print('done, amount circles: ' + str(len(circles)))
     return [list(map(lambda circle: (circle['x'], circle['y']),circles))]
@@ -214,8 +281,8 @@ def calculate_minimal_pointset(spawn_points):
 
 
 def inside_radius(p1, p2):
-    #return distance.great_circle((p1['x'], p1['y']), (p2['x'],p2['y'])).meters <= config.SCAN_RADIUS
-    return haversine(p1['x'], p1['y'], p2['x'],p2['y']) <= (config.SCAN_RADIUS-5)
+    return distance.distance((p1['x'], p1['y']), (p2['x'],p2['y'])).meters <= config.SCAN_RADIUS
+    #return haversine(p1['x'], p1['y'], p2['x'],p2['y']) <= (config.SCAN_RADIUS-5)
 
 from math import radians, cos, sin, asin, sqrt
 def haversine(lon1, lat1, lon2, lat2):
