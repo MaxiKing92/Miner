@@ -1,6 +1,8 @@
 import math
 from geopy import distance, Point
 from intervaltree import Interval, IntervalTree
+import pickle
+import os
 
 
 import config
@@ -122,6 +124,23 @@ def insert_point_into_tree(point, interval):
 
 
 def calculate_minimal_pointset(spawn_points):
+    filename = (str(config.MAP_START) +'_' +str(config.MAP_END) + '.data')
+    if os.path.isfile(filename):
+        points = pickle.load(open(filename, "rb" ))
+
+        # slice list into
+        n = config.GRID[0] * config.GRID[1] # total workers
+        points = [ points[i::n] for i in range(0,n) ]
+
+        # and sort the points for each worker
+        points = [
+            sort_points_for_worker(p, i)
+            for i, p in enumerate(points)
+        ] 
+
+        # save it
+        return points
+
     points = []
     interval_of_points = IntervalTree()
 
@@ -201,17 +220,19 @@ def calculate_minimal_pointset(spawn_points):
 
     points = list(map(lambda circle: (circle['x'], circle['y']),circles))
 
+    pickle.dump(points, open(filename, "wb" ))
+
     # slice list into
-    total_workers = config.GRID[0] * config.GRID[1]
-    n = int(len(points)/total_workers + 1)
-    points = [points[i:i + n] for i in range(0, len(points), n)]
+    n = config.GRID[0] * config.GRID[1] # total workers
+    points = [ points[i::n] for i in range(0,n) ]
 
     # and sort the points for each worker
     points = [
         sort_points_for_worker(p, i)
         for i, p in enumerate(points)
     ] 
-    print(points)
+
+    # save it
     return points
 
 
