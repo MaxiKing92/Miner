@@ -438,10 +438,10 @@ def get_known_spawnpoints(session):
             lon <= {lon_end}
         GROUP BY spawn_id;
     '''.format(
-        lat_end=config.MAP_START[0],
-        lat_start=config.MAP_END[0],
-        lon_start=config.MAP_START[1],
-        lon_end=config.MAP_END[1]
+        lat_start=min(config.MAP_START[0], config.MAP_END[0]),
+        lat_end=max(config.MAP_START[0], config.MAP_END[0]),
+        lon_start=min(config.MAP_START[1], config.MAP_END[1]),
+        lon_end=max(config.MAP_START[1], config.MAP_END[1])
     ))
     query = session.execute(query)
     results = []
