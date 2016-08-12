@@ -131,7 +131,7 @@ def distribute_pointset(points):
     lat_sorted_points = deque(sorted(points, key=lambda point: point[0]))
 
     each_row = int(len(points) / config.GRID[0])
-    each_col = int(len(points) / config.GRID[1])
+    each_col = int(each_row / config.GRID[1])
 
     final_list = []
 
@@ -151,9 +151,18 @@ def distribute_pointset(points):
         if len(lon_sorted_points):
             final_list[-1].extend(list(lon_sorted_points))
     
+    total_worker = config.GRID[0] * config.GRID[1]
+
     if len(lat_sorted_points):
-        final_list[-1].extend(list(lat_sorted_points))
+        if len(final_list) > total_worker:
+            final_list.append(list(lat_sorted_points))
+        else:
+            final_list[-1].extend(list(lat_sorted_points))
+
+
     
+    final_list = list(filter(lambda worker_set: len(worker_set) > 0, final_list))
+
     return final_list
 
 def calculate_minimal_pointset(spawn_points):
