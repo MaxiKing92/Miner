@@ -122,24 +122,47 @@ def insert_point_into_tree(point, interval):
     return interval
 
 
+def distribute_pointset(points):
+    """
+    distribute scanpoints amongst workers
+    """
+    from collections import deque
+
+    lat_sorted_points = deque(sorted(points, key=lambda point: point[0]))
+
+    each_row = int(len(points) / config.GRID[0])
+    each_col = int(len(points) / config.GRID[1])
+
+    final_list = []
+
+    for row_number in range(0, config.GRID[0]):
+        row_cell = []
+        while len(lat_sorted_points) > 0 and len(row_cell) < each_row:
+            row_cell.append(lat_sorted_points.popleft())
+
+        lon_sorted_points = deque(sorted(row_cell, key=lambda point: point[1]))
+
+        for col_number in range(0, config.GRID[1]):
+            col_cell = []
+            while len(lon_sorted_points) > 0 and len(col_cell) < each_col:
+                col_cell.append(lon_sorted_points.popleft())
+
+            final_list.append(col_cell)
+        if len(lon_sorted_points):
+            final_list[-1].extend(list(lon_sorted_points))
+    
+    if len(lat_sorted_points):
+        final_list[-1].extend(list(lat_sorted_points))
+    
+    return final_list
 
 def calculate_minimal_pointset(spawn_points):
     filename = (str(config.MAP_START) +'_' +str(config.MAP_END) + '.data')
     if os.path.isfile(filename):
         points = pickle.load(open(filename, "rb" ))
 
-        # slice list into
-        n = config.GRID[0] * config.GRID[1] # total workers
-        points = [ points[i::n] for i in range(0,n) ]
+        return distribute_pointset(points)
 
-        # and sort the points for each worker
-        points = [
-            sort_points_for_worker(p, i)
-            for i, p in enumerate(points)
-        ] 
-
-        # save it
-        return points
 
     points = []
     interval_of_points = IntervalTree()
@@ -220,22 +243,10 @@ def calculate_minimal_pointset(spawn_points):
 
     points = list(map(lambda circle: (circle['x'], circle['y']),circles))
 
+    # save the calculations
     pickle.dump(points, open(filename, "wb" ))
 
-    # slice list into
-    n = config.GRID[0] * config.GRID[1] # total workers
-    points = [ points[i::n] for i in range(0,n) ]
-
-    # and sort the points for each worker
-    points = [
-        sort_points_for_worker(p, i)
-        for i, p in enumerate(points)
-    ] 
-
-    # save it
-    return points
-
-
+    return distribute_pointset(points)
 
 
 def inside_radius(p1, p2):
