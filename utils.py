@@ -241,7 +241,7 @@ def calculate_minimal_pointset(spawn_points):
         inside = False
         for circle in circles:
             # if there's a circle which covers the point, we can stop the evaluation for this point
-            if distance.distance((point['x'], point['y']), (circle['x'], circle['y'])).meters <= 70:
+            if distance.distance((point['x'], point['y']), (circle['x'], circle['y'])).meters <= config.SCAN_RADIUS:
                 inside = True
                 break
         if not inside:
