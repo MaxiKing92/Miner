@@ -89,21 +89,19 @@ def map_circle(interval_circle, points):
     return Interval(interval_begin, interval_end, circle)
 
 def map_point(interval_point, circles):
-    interval_begin = interval_point[0]
-    interval_end = interval_point[1]
     point = interval_point[2]
     
     lat = point['x']
     point['circles'] = [circle[2] for circle in circles[lat] if inside_radius(circle[2], point)]
 
-    return Interval(interval_begin, interval_end, point)
+    return point
 
 def map_points_to_circles(circles, points):
     newCircles = []
     meh = 0
     circles = IntervalTree(map(lambda interval_circle, points=points: map_circle(interval_circle, points), circles))
 
-    points = IntervalTree(map(lambda point, circles=circles: map_point(point,circles),points))
+    points = list(map(lambda point, circles=circles: map_point(point,circles),points))
 
     print('circles generated')
     
@@ -199,7 +197,7 @@ def calculate_minimal_pointset(spawn_points):
             y = lon2
             a_circle = {'x':x,'y':y, 'insideCount':0}
             dist = distance.distance((x,y), point).meters
-            if dist > 70:
+            if dist > config.SCAN_RADIUS:
                 print('wtf???')
 
             interval_of_circles = insert_point_into_tree(a_circle, interval_of_circles)
@@ -207,13 +205,13 @@ def calculate_minimal_pointset(spawn_points):
         
 
     print('circles generated')
+    print('number of spawnpoints: ' +str(len(points)))
     foo = map_points_to_circles(interval_of_circles, interval_of_points)
     print('distances calculated')
     circles = foo[0]
     points = foo[1]
     
     
-    print('points: ' +str(len(points)))
     print('sample circles: ' +str(len(circles)))
     new_circles = []
     countt = 0
@@ -236,8 +234,7 @@ def calculate_minimal_pointset(spawn_points):
     circles = new_circles
 
     # ensure that every point is going to be scanned
-    for interval_point in points:
-        point = interval_point[2]
+    for point in points:
         inside = False
         for circle in circles:
             # if there's a circle which covers the point, we can stop the evaluation for this point
