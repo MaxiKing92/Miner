@@ -351,6 +351,11 @@ def calculate_minimal_pointset(spawn_points):
     
     points = [{'x': x[0], 'y': x[1]} for x in spawn_points]
     # better check the result
+    print('starting safety check to ensure no spawn point missed')
+    print("""If you ever see this message coming up:
+          "A sadlonely circle has been found :("
+          Please report back immediately, as I\'m thing about 
+          removing the safety check for performace reasons""")
     scan_points = _check_scan_point_set_for_safety(points, scan_points)
     print('Calculating minimal scan point set done, set size: ' + str(len(scan_points)))
 
