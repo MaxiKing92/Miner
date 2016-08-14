@@ -366,7 +366,7 @@ def calculate_minimal_pointset(spawn_points):
     # check if we have anything to do at all
     pointset = already_generated_pointset()
     if pointset:
-        return distribute_pointset(pointset)
+        return pointset
 
 
     print('Number of spawnpoints: ' +str(len(spawn_points)))

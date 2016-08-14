@@ -13,7 +13,7 @@ import utils
 from names import POKEMON_NAMES
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
-
+import scanpoints
 
 # Check whether config has all necessary attributes
 REQUIRED_SETTINGS = (
@@ -118,7 +118,7 @@ def get_pokemarkers():
 def get_worker_markers():
     import db
     spawn_points = db.get_known_spawnpoints(db.Session())
-    spawn_points = utils.calculate_minimal_pointset(spawn_points)
+    spawn_points = scanpoints.calculate_minimal_pointset(spawn_points)
 
     markers = []
     #points = utils.get_points_per_worker()
