@@ -7,111 +7,13 @@ import random
 from geopy import distance, Point
 from intervaltree import Interval, IntervalTree
 
+import scipy.sparse
+from scipy.sparse import csr_matrix
+from scipy.spatial import KDTree
+import numpy as np
+from pyproj import Proj
+
 import config
-
-def map_circle(interval_circle, points):
-    """
-    Parameters:
-        interval_circle: - a scan circle
-                         - type: Interval(begin, end, circle_data)
-        points: IntervalTree of spawn points, can be queries by latitude
-
-    Return value:
-        - interval_circle with all points added which are within it's
-          scan radius
-    """
-
-    # extract interval data and latitude
-    circle = interval_circle.data
-    lat = circle ['x']
-
-    # find all points which are within radius
-    circle['inside'] = [
-            point[2] 
-            for point in points[lat] 
-            if inside_radius(circle, point[2])
-    ]
-
-    circle['insideCount'] = len(circle['inside'])
-
-    # return a new Interval, as you can't just modify the data of an interval
-    return Interval(interval_circle.begin, interval_circle.end, circle)
-
-
-def map_point(interval_point, circles):
-    """
-    Parameters:
-        interval_point: - A spawnpoint
-                        - type: Interval(begin, end, point_data)
-        circles: IntervalTree of scan circles, can be queries by latitude
-
-    Return value:
-        - point with a list of the scan circles which cover this point
-    """
-
-    # extract interval data and latitude
-    point = interval_point.data
-    lat = point['x']
-
-    point['circles'] = [
-            circle[2] 
-            for circle in circles[lat] 
-            if inside_radius(circle[2], point)
-    ]
-
-    return point
-
-def _distance_calculations(circles, points):
-    """
-    Parameters:
-        circles: IntervalTree of scan circles, sorted by latitude
-        points: IntervalTree of spawn points, sorted by latitude
-
-    Return value:
-        - IntervalTree of scan circles, now we know which and how many points
-          lie within their scan ranges
-        - List of spawn points, each of them has a list of scan circle which it
-          resides in.
-
-
-    """
-
-    # checks for all circles which points lies within their radius
-    circles = IntervalTree(map(lambda interval_circle, points=points: map_circle(interval_circle, points), circles))
-
-    # adds the list of scan circles to the point which all cover the point
-    points = list(map(lambda point, circles=circles: map_point(point,circles),points))
-
-    return (circles, points)
-
-
-def insert_point_into_tree(point, interval):
-    """
-    Inserts a datapoint into an IntervalTree structure with some offset added
-    so that it can be queried for scanning.
-
-    Parameters:
-        - point: some data which has an x and y coordinate, 
-                 either spawnpoint or scan circle
-        - interval: the interval it needs to be inserted into
-    
-    Return value: The IntervalTree with the inserted point.
-    """
-
-    origin = Point(point['x'], point['y'])
-
-    # have some margin for rounding
-    offset = config.SCAN_RADIUS + 10
-
-    lat_begin = distance.distance(meters=-offset).destination(origin, 0).latitude
-    lat_end = distance.distance(meters=offset).destination(origin, 0).latitude
-
-    # insert point with range [lat - offset : lat + offset]
-    interval[lat_begin:lat_end] = point
-    return interval
-
-
-
 
 
 def distribute_pointset(points):
@@ -251,20 +153,13 @@ def _generate_samples(spawn_points):
     point, so that the point still is included in the scan area.
     """
     # create the IntervalTrees
-    interval_of_points = IntervalTree()
-    interval_of_circles = IntervalTree()
 
     # the maximum radius used should have some tolerance so that we can be sure
     # that even if there are small errors we still are in the scan area
     radius = config.SCAN_RADIUS-5
+    circles = []
 
     for point in spawn_points:
-        # convert the list of tuples to actually useful objects which can store
-        # the circles in which they are located and if they are already covered
-        # by a circle which we've choosen for our final set of scanpoints
-        new_point = {'x':point[0],'y':point[1], 'covered': False,'circles':[]}
-        interval_of_points = insert_point_into_tree(new_point, interval_of_points)
-
         # generate #SAMPLES_PER_POINT circles per spawn point
         for i in range(0, config.SAMPLES_PER_POINT):
             
@@ -279,61 +174,14 @@ def _generate_samples(spawn_points):
 
             x = lat2
             y = lon2
-            a_circle = {'x':x,'y':y, 'insideCount':0}
             dist = distance.distance((x,y), point).meters
             if dist > config.SCAN_RADIUS:
                 print('wtf???')
 
-            interval_of_circles = insert_point_into_tree(a_circle, interval_of_circles)
-    return (interval_of_points, interval_of_circles)
+            # for faster processing
+            circles.append((x,y))
 
-
-def _choose_best_scanpoints_from_samples(circles, number_of_spawn_points):
-    """
-    Given a set of scanpoints and how many spawn point there are, choose those 
-    from the set which cover the most points. When done we should have a 
-    set of scan points which cover all spawn points and is as small as possible.
-    """
-    new_circles = []
-    covered_points_counter = 0
-    while True:
-      # get circle with the highest number of uncovered points
-      interval_circle = max(circles, key=lambda circle: circle[2]['insideCount'])
-      circle = interval_circle.data
-
-      uncovered_point_found = False
-      for point in circle['inside']:
-
-          # iterate over each point which is covered by this circle and check
-          # if it's already covered by a circle from the final scan point set.
-          if not point['covered']:
-              # set variable to true, so that this circle will be added to the
-              # final scan point set
-              uncovered_point_found = True
-              # declare this point as covered by a circle of the final set
-              point['covered'] = True
-              # obviously increase the covered points counter
-              covered_points_counter += 1
-
-              # every circle which covers this point gets it's insideCount
-              # reduced as this point is no longer of concern to any of them
-              for circle_b in point['circles']:
-                  circle_b['insideCount'] -= 1
-      
-      # add this circle to the list if it covers an additional point
-      if uncovered_point_found:
-          new_circles.append(circle)
-
-      # As this circle as already served it's purpose we can remove it savely from
-      # the list
-      circles.remove(interval_circle)
-
-      # We are done when our covered points counter reaches the amount of points
-      # that we have to cover
-      if(covered_points_counter == number_of_spawn_points):
-          break
-
-    return new_circles
+    return circles
 
 
 def _check_scan_point_set_for_safety(points, scan_points):
@@ -346,14 +194,96 @@ def _check_scan_point_set_for_safety(points, scan_points):
         covered = False
         for circle in scan_points:
             # if there's a circle which covers the point, we can stop the evaluation for this point
-            if distance.distance((point['x'], point['y']), (circle['x'], circle['y'])).meters <= config.SCAN_RADIUS:
+            if distance.distance((point['x'], point['y']), (circle[0], circle[1])).meters <= config.SCAN_RADIUS:
                 covered = True
                 break
         if not covered:
             print('A sadlonely circle has been found :(')
-            scan_points.append({'x':point['x'],'y': point['y']})
+            scan_points.append((point['x'], point['y']))
 
     return scan_points
+
+
+def _transform_to_euclidean(coordinates):
+    """
+    transforms a list of coordinates to euclidean
+    coordinates for faster distance calculations.
+    tuples have to be (lat, lon)
+    """
+    to_euclid = Proj(proj='utm')
+    coords = [ (to_euclid(point[1], point[0])) for point in coordinates]
+    return coords
+
+
+def choose_best_scan_points(matrix):
+    """
+    Returns which scan points will be the best as
+    list of indicies.
+    Parameter:
+        Matrix: a matrix with a row for each scan point. An entry (i,j)
+                is 1 if the spawn point number j can be reached from
+                scan point i
+                - eg: p = spawn point, sc = scan point("scan circle")
+
+                      p1  p2  p3 
+
+                 sc1  1   0   1
+
+                 sc2  1   1   0
+
+                 point p1 is in scan reach of both, sc1 and sc2
+                 point p2 can only be reached from scan point sc2
+                 point p3 can only be reached from scan point sc1
+    
+    """
+
+    # list of incides of the choosen scan points
+    choosen_circles = []
+
+    # array filled with one's, used to mark which points
+    # cannot be scanned with the choosen_circles
+    identity_array = np.ones((1, matrix.shape[1]))
+
+    # could also be while true, however this ensures
+    # termination even if there was a mistake beforehand
+    for i in range(0, matrix.shape[1]):
+
+        # maximum unscanned points reachable with a single
+        # scan
+        nnz = matrix.getnnz(1)
+        maximum = nnz.max()
+        
+        # we can't cover new points, hence we are done
+        if maximum == 0:
+            print('done')
+            break
+
+        # determine which scan point( = row indicies)
+        # can scan the most uncovered points
+        for i,x in enumerate(nnz):
+            if x == maximum:
+                new_circle = matrix.getrow(i)
+                choosen_circles.append(i)
+                break
+
+
+        # mark which colums we've already covered
+        # by setting each of them to zero
+        identity_array -= new_circle.toarray()
+
+        # create a diagonal matrix which will be used to
+        # erease all covered points from the scan matrix
+        mult_matrix = scipy.sparse.diags(identity_array[0])
+
+        # set points we've already scanned to 0
+        matrix = matrix * mult_matrix
+
+    return choosen_circles
+
+
+
+
+
 
 
 def calculate_minimal_pointset(spawn_points):
@@ -362,7 +292,6 @@ def calculate_minimal_pointset(spawn_points):
     points so that we can reduce the amount of scanning as much as possible.
     Result is already split up into worker sublists
     """
-
     # check if we have anything to do at all
     pointset = already_generated_pointset()
     if pointset:
@@ -371,22 +300,63 @@ def calculate_minimal_pointset(spawn_points):
 
     print('Number of spawnpoints: ' +str(len(spawn_points)))
     print('Generating samples...')
-    interval_of_points, interval_of_circles = _generate_samples(spawn_points)
-    print('Sample creation finished')
-    print(str(len(interval_of_points))+ ' samples were created.')
-    print('Starting distance calculations')
-    circles, points = _distance_calculations(interval_of_circles, interval_of_points)
-    print('Distance calculations finished')
-    
-    # select the best samples
-    scan_points = _choose_best_scanpoints_from_samples(circles, len(points))
+    circles = _generate_samples(spawn_points)
 
+    # transform coordinates to euclidean to reduce the time needed
+    # for calculating distances(which is very ressource hungry)
+    euclid_circles = _transform_to_euclidean(circles)
+    euclid_points = _transform_to_euclidean(spawn_points)
+
+    print('Starting distance calculations')
+
+    # create a tree which can be scanned by location
+    tree_of_points = KDTree(euclid_points)
+
+    # and query it. returns the distances in matches[0]
+    # and the indicies in tree_of_points.data in matches[1]
+    matches = tree_of_points.query(
+            euclid_circles, 
+            # needed: upper bound for #matches.
+            50,
+            distance_upper_bound=70
+    )
+    indexes = []
+    for index, circle_number in enumerate(matches[1]):
+
+        indexes.extend( [
+                [index, point_index]
+                for point_index in circle_number 
+                if point_index < len(euclid_points)
+        ])
+
+    row_ind = [index[0] for index in indexes]
+    col_ind = [index[1] for index in indexes]
+    entries = [1 for point_index in indexes]
+
+    # for details what this matrix looks like
+    # peek at the docstring for the
+    # choose_best_scan_points methods
+    inside_matrix = scipy.sparse.csr_matrix(
+            (entries, (row_ind, col_ind)), 
+            shape=((len(euclid_circles), len(euclid_points)))
+    )
+    print('Distance calculations finished')
+    print('Calculating best scan points')
+    circle_indexes = choose_best_scan_points(inside_matrix)
+    print('Best scan points are calculated')
+    print('total scanning points: ' + str(len(circle_indexes)))
+
+    scan_points = [ circles[index] for index in circle_indexes]
+
+    
+    points = [{'x': x[0], 'y': x[1]} for x in spawn_points]
     # better check the result
     scan_points = _check_scan_point_set_for_safety(points, scan_points)
     print('Calculating minimal scan point set done, set size: ' + str(len(scan_points)))
 
     # We need a list of simple (lat,lon) tuples
-    points = list(map(lambda scan_point: (scan_point['x'], scan_point['y']), scan_points))
+    points = list(map(lambda scan_point: (scan_point[0], scan_point[1]), scan_points))
+    print(len(points))
 
     # save the calculations
     filename = _pointset_storage_filename()
