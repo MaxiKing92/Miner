@@ -190,6 +190,8 @@ def _check_scan_point_set_for_safety(points, scan_points):
     by these scan points, check if they all are covered and if not add
     them as their own scan points
     """
+    log = open('minimal_scan_calculations.log', 'a')
+    error_counter = 0
     for point in points:
         covered = False
         for circle in scan_points:
@@ -198,8 +200,17 @@ def _check_scan_point_set_for_safety(points, scan_points):
                 covered = True
                 break
         if not covered:
-            print('A sadlonely circle has been found :(')
+            error_counter += 1
+            print('A sad lonely circle has been found :(')
             scan_points.append((point['x'], point['y']))
+
+    msg = '{sp} spawnpoints, {scp} scanpoints, {error} errors catched\n'.format(
+            sp=len(points),
+            scp=len(scan_points),
+            error=error_counter
+    )
+    log.write(msg)
+    log.close()
 
     return scan_points
 
@@ -352,10 +363,10 @@ def calculate_minimal_pointset(spawn_points):
     points = [{'x': x[0], 'y': x[1]} for x in spawn_points]
     # better check the result
     print('starting safety check to ensure no spawn point missed')
-    print("""If you ever see this message coming up:
-          "A sadlonely circle has been found :("
-          Please report back immediately, as I\'m thing about 
-          removing the safety check for performace reasons""")
+    print('If you ever see this message coming up:\n' + \
+          '"A sad lonely circle has been found :("\n' + \
+          'report back immediately, as I\'m thing about ' + \
+          'removing the safety check for performace reasons')
     scan_points = _check_scan_point_set_for_safety(points, scan_points)
     print('Calculating minimal scan point set done, set size: ' + str(len(scan_points)))
 
