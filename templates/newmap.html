@@ -84,7 +84,8 @@
             Pokemon: L.layerGroup([]),
             Trash: L.layerGroup([]),
             Gyms: L.layerGroup([]),
-            Workers: L.layerGroup([])
+            Workers: L.layerGroup([]),
+            Spawns: L.layerGroup([])
         };
 
         function getPopupContent (item) {
@@ -208,6 +209,41 @@
                 workersLoaded = true;
             });
         }
+        var spawnsLoaded = false;
+        function loadSpawnsLayer () {
+            $.get('/spawn_data', function (response) {
+                var data = $.parseJSON(response);
+                var points = [];
+                data.points.forEach(function (raw) {
+                    var point;
+                    if (raw.type == 'spawn_point') {
+                        point = L.marker([raw.lat, raw.lon], {icon: L.icon({iconUrl: '/static/img/marker-circle.png', iconSize: [8, 8], iconAnchor: [4, 4]})});
+                        point.on('click', function (e) {
+                            var marker_url = raw.url;
+
+                            //display a placeholder popup
+                            var pop = L.popup({maxHeight: 200, maxWidth: 500}).setLatLng([raw.lat,raw.lon]).setContent('Loading...').openOn(map);
+                            pop.openPopup();
+
+                            //request data and make a new popup when it's done
+                            $.ajax({
+                                url: marker_url,
+                                success: function (data) {
+                                    //close placeholder popup
+                                    pop.closePopup();
+
+                                    //attach the real popup and open it
+                                    pop.setContent(data);
+                                    pop.update();
+                                }
+                            });
+                        });
+                    }
+                point.addTo(overlays.Spawns);
+                });
+            })
+            spawnsLoaded = true;
+        }
 
         var map = L.map('main-map').setView([{{ map_center[0] }}, {{ map_center[1] }}], 13);
         overlays.Pokemon.addTo(map);
@@ -215,6 +251,9 @@
         map.on('overlayadd', function (event) {
             if (event.name === 'Workers' && !workersLoaded) {
                 loadWorkersLayer();
+            }
+            if (event.name === 'Spawns' && !spawnsLoaded) {
+                loadSpawnsLayer();
             }
         });
         L.tileLayer('{{ map_provider_url }}', {
