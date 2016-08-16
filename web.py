@@ -249,6 +249,40 @@ def report_heatmap():
     session.close()
     return json.dumps(points)
 
+@app.route('/spawn_data')
+def spawn_data():
+    return json.dumps({
+        'points': get_spawn_markers(),
+    })
+
+def get_spawn_markers():
+    import db
+    spawn_points = db.get_spawnpoints_with_spawnid(db.Session())
+    markers = []
+    for spawn_point in spawn_points:
+        markers.append({
+            'lat': spawn_point[0],
+            'lon': spawn_point[1],
+            'type': 'spawn_point',
+            'spawn_id': spawn_point[2],
+            'url': '/spawn_data/{spawn_id}'.format(spawn_id=spawn_point[2])
+        })
+    return markers;
+
+@app.route('/spawn_data/<spawn_id>')
+def get_spawn_label_data(spawn_id):
+    return get_spawnpoint_text(spawn_id)
+
+def get_spawnpoint_text(spawn_id):
+    import datetime
+    spawndata = db.get_spawnpoint_data(db.Session(), spawn_id)
+    stringlist = [("{time} | {pokemonid} {pokemonname}"
+        .format(
+            time = datetime.datetime.fromtimestamp(x[0]).strftime("%Y-%m-%d %H:%M"),
+            pokemonid = str(x[1]),
+            pokemonname = POKEMON_NAMES[x[1]]
+        )) for x in spawndata]
+    return "<br>".join(stringlist)
 
 if __name__ == '__main__':
     args = get_args()
