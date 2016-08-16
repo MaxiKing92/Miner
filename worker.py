@@ -202,7 +202,6 @@ class Slave(threading.Thread):
                             pokemon['time_till_hidden_ms'] > 900000
                         )
                         if invalid_time:
->>>>>>> upstream/master
                             continue
                         pokemons.append(
                             self.normalize_pokemon(
