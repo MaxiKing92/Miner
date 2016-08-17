@@ -465,3 +465,21 @@ def get_spawnpoint_data(session, spawn_id):
     for x in query.fetchall():
         results.append(( x[0] , x[1] ))
     return results
+    
+def get_nr_pokemon_for_spawnpoint(session, spawn_id):
+    query = (''' 
+        SELECT pokemon_id, count(*) AS nrPoke
+        FROM sightings
+        WHERE spawn_id = "{sid}"
+        GROUP BY pokemon_id
+        ORDER BY nrPoke DESC;
+    '''.format(
+        sid = spawn_id
+    ))
+    query = session.execute(query)
+    results = []
+    for x in query.fetchall():
+        results.append(( x[0] , x[1] ))
+    return results
+
+
