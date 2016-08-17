@@ -276,13 +276,18 @@ def get_spawn_label_data(spawn_id):
 def get_spawnpoint_text(spawn_id):
     import datetime
     spawndata = db.get_spawnpoint_data(db.Session(), spawn_id)
-    stringlist = [("{time} | {pokemonid} {pokemonname}"
+    stringlist = [("<tr><td>{time}</td>  <td>{pokemonid}</td> <td>{pokemonname}</td></tr>"
         .format(
             time = datetime.datetime.fromtimestamp(x[0]).strftime("%Y-%m-%d %H:%M"),
             pokemonid = str(x[1]),
             pokemonname = POKEMON_NAMES[x[1]]
         )) for x in spawndata]
-    return "<br>".join(stringlist)
+    return "{tablehead}{headline}{content}{tabletail}".format(
+        tablehead = "<table>",
+        headline = "<tr><th>Despawntime</th> <th>Pokemon-ID</th> <th>Pokemon-Name</th></tr> ",
+        content = "".join(stringlist),
+        tabletail = "</table>")
+
 
 if __name__ == '__main__':
     args = get_args()
