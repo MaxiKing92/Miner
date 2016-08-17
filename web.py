@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
+import datetime
 import argparse
 import json
 
@@ -256,7 +257,6 @@ def spawn_data():
     })
 
 def get_spawn_markers():
-    import db
     spawn_points = db.get_spawnpoints_with_spawnid(db.Session())
     markers = []
     for spawn_point in spawn_points:
@@ -274,18 +274,29 @@ def get_spawn_label_data(spawn_id):
     return get_spawnpoint_text(spawn_id)
 
 def get_spawnpoint_text(spawn_id):
-    import datetime
     spawndata = db.get_spawnpoint_data(db.Session(), spawn_id)
-    stringlist = [("<tr><td>{time}</td>  <td>{pokemonid}</td> <td>{pokemonname}</td></tr>"
+    stringlist1 = [("<tr><td>{time}</td>  <td>{pokemonid}</td> <td>{pokemonname}</td></tr>"
         .format(
             time = datetime.datetime.fromtimestamp(x[0]).strftime("%Y-%m-%d %H:%M"),
             pokemonid = str(x[1]),
             pokemonname = POKEMON_NAMES[x[1]]
         )) for x in spawndata]
-    return "{tablehead}{headline}{content}{tabletail}".format(
+
+    spawndata = db.get_nr_pokemon_for_spawnpoint(db.Session(), spawn_id)
+    sumPoke = sum([x[1] for x in spawndata])
+    stringlist2 = [("<tr><td>{pokemonid}</td>  <td>{pokemonname}</td> <td>{count}</td> <td>{percentage}</td></tr>".format(
+        pokemonid = str(x[0]),
+        pokemonname = POKEMON_NAMES[x[0]],
+        count = str(x[1]),
+        percentage = "%.2f" % (x[1]*100/sumPoke)
+    )) for x in spawndata]  
+
+    return "{tablehead}{headline1}{content1}{tabletail}<br>{tablehead}{headline2}{content2}{tabletail}".format(
         tablehead = "<table>",
-        headline = "<tr><th>Despawntime</th> <th>Pokemon-ID</th> <th>Pokemon-Name</th></tr> ",
-        content = "".join(stringlist),
+        headline1 = "<tr><th>Despawntime</th> <th>Pokemon-ID</th> <th>Pokemon-Name</th></tr> ",
+        content1 = "".join(stringlist1),
+        headline2 = "<tr><th>PokemonID</th> <th>Pokemon-Name</th> <th>Count</th> <th>%</th></tr>",
+        content2 = "".join(stringlist2),
         tabletail = "</table>")
 
 
