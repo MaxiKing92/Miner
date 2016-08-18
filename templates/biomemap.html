@@ -66,10 +66,19 @@
             });
         }
 
+        function getCells () {
+            return new Promise(function (resolve, reject) {
+                $.get('/biome_data', function (response) {
+                    resolve($.parseJSON(response));
+                });
+            });
+        }
+
         var markers = {};
         var overlays = {
             Nests: L.layerGroup([]),
             Biomes: L.layerGroup([]),
+            BiomesCell: L.layerGroup([]),
             Macrobiomes: L.layerGroup([]),
         };
 
@@ -120,8 +129,19 @@
             return marker;
         }
 
+        function BiomeCell (raw) {
+            var cell = L.polygon(raw.vertices, { opacity: 0.3});
+            marker.raw = raw;
+            markers[raw.id] = marker;
+            //marker.on('popupopen',function popupopen (event) {
+                //event.popup.setContent(getPopupContent(event.target.raw));
+            //});
+            marker.bindPopup();
+            return cell;
+        }
+
         function addMarkersToMap (data, map) {
-            // Pokemons
+            // spawnpoints
             data.forEach(function (item) {
                 var marker = null;
                 
@@ -141,10 +161,28 @@
             });
         }
 
+        function addMarkersToMap (data, map) {
+            // biome cells
+            data.forEach(function (item) {
+                var cell = null;
+
+                cell = BiomeCell(item)
+                
+                if (item.biome.indexOf('bug')>-1) {
+                    //cell.addTo(overlays.BiomesCell);
+                }
+            });
+        }
+
         function refresh () {
+            console.log('loading markers')
             getMarkers().then(function (data) {
                 addMarkersToMap(data, map);
             });
+            console.log('loading cells')
+            //getCells().then(function (data) {
+            //    addCellsToMap(data, map);
+            //});
         }
 
         var map = L.map('main-map').setView([{{ map_center[0] }}, {{ map_center[1] }}], 13);
@@ -155,6 +193,7 @@
             $('.my-location').on('click', function () {
                 map.locate({ enableHighAccurracy: true, setView: true });
             });
+
             refresh();
         });
     </script>

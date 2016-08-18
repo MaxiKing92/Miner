@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
 import argparse
-import logging
 import json
 import sys
 import os.path
+import s2sphere
 
 import config
 import db
@@ -17,6 +17,8 @@ from scipy.cluster.hierarchy import fcluster
 
 from names import POKEMON_NAMES
 
+
+EARTH_RADIUS = 6371 * 1000
 def learn_clusters():
     
     if(np.logical_and(os.path.exists('rates.txt'),os.path.exists('locs.txt'))):
@@ -72,8 +74,36 @@ def learn_clusters():
 
     b_macrobiome = np.logical_and(np.sum(aggregrates>0.1,axis=0)/len(rates[:,1])>0.01,clustsize<4)
 
-    # assign biomes
+    # create biome cells
+
+    r = s2sphere.RegionCoverer()
+    r.min_level = 14
+    r.max_level = 14
+    p1 = s2sphere.LatLng.from_degrees(np.max(locs[:,0]),np.max(locs[:,1]))
+    p2 = s2sphere.LatLng.from_degrees(np.min(locs[:,0]),np.min(locs[:,1]))
+    
+    cell_ids = r.get_covering(s2sphere.LatLngRect.from_point_pair(p1, p2))
+    
+    cells = []
+    
+    for cell_id in cell_ids:
+        c = s2sphere.Cell(cell_id)
+        vertices = []
+        for i in range(4):
+            vertex = c.get_vertex(i)
+            latlng = s2sphere.LatLng.from_point(vertex)
+            vertices.append((latlng.lat().degrees,
+                         latlng.lng().degrees))
+        cells.append({
+            'id' : int(len(cells)+1),
+            'cell_id': cell_id.to_token(),
+            'vertices': vertices,
+            'biome': [],
+        })
+
+    # assign biomes markers
     markers = []
+    
     for ispawn in range(len(rates[:,1])):
         nest = []
         biome = []
@@ -98,10 +128,28 @@ def learn_clusters():
                             biome.append('water')
                         elif(clust[16]==iclust): #pidgey for normal
                             biome.append('normal')
+                            cell_id = get_cell_id(locs[ispawn,0], locs[ispawn,1])
+                            for cell in cells:
+                                if(cell['cell_id'] == cell_id.to_token()):
+                                    cell['biome'].append('normal')
+                                    cell['biome'] = sorted(set(cell['biome']))
+                                    break
                         elif(clust[96]==iclust): #drowzee for psychic
                             biome.append('psychic')
+                            cell_id = get_cell_id(locs[ispawn,0], locs[ispawn,1])
+                            for cell in cells:
+                                if(cell['cell_id'] == cell_id.to_token()):
+                                    cell['biome'].append('psychic')
+                                    cell['biome'] = sorted(set(cell['biome']))
+                                    break
                         elif(clust[13]==iclust): #weedle for bug
                             biome.append('bug')
+                            cell_id = get_cell_id(locs[ispawn,0], locs[ispawn,1])
+                            for cell in cells:
+                                if(cell['cell_id'] == cell_id.to_token()):
+                                    cell['biome'].append('bug')
+                                    cell['biome'] = sorted(set(cell['biome']))
+                                    break
                         else:
                             s = 'unknown biome:'
                             for ipoke in np.where(clust==iclust)[0]:
@@ -119,7 +167,20 @@ def learn_clusters():
         })
 
     with open('spawnmarkers.json', 'w') as outfile:
-            json.dump(markers, outfile)
+        json.dump(markers, outfile)
+
+    with open('biomecells.json', 'w') as outfile:
+        json.dump(cells, outfile)
+
+
+
+def get_cell_id(lat, long):
+    p1 = s2sphere.LatLng.from_degrees(lat,long)
+    cell_id = s2sphere.CellId.from_lat_lng(p1)
+    while cell_id.level() > 14:
+        cell_id = cell_id.parent()
+    return cell_id
+
 
 
 

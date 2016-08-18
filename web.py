@@ -65,6 +65,10 @@ def pokemon_data():
 def spawn_data():
     return json.dumps(get_spawnmarkers())
 
+@app.route('/biome_data')
+def biome_data():
+    return json.dumps(get_biomecells())
+
 
 @app.route('/workers_data')
 def workers_data():
@@ -87,6 +91,14 @@ def get_spawnmarkers():
         json_data=open('spawnmarkers.json').read()
         spawnmarkers = json.loads(json_data)
         return spawnmarkers
+    else:
+        return
+
+def get_biomecells():
+    if(os.path.exists('biomecells.json')):
+        json_data=open('biomecells.json').read()
+        biomecells = json.loads(json_data)
+        return biomecells
     else:
         return
 
