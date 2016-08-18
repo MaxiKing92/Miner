@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 from datetime import datetime
-import datetime
 import argparse
 import json
 
@@ -277,7 +276,7 @@ def get_spawnpoint_text(spawn_id):
     spawndata = db.get_spawnpoint_data(db.Session(), spawn_id)
     stringlist1 = [("<tr><td>{time}</td>  <td>{pokemonid}</td> <td>{pokemonname}</td></tr>"
         .format(
-            time = datetime.datetime.fromtimestamp(x[0]).strftime("%Y-%m-%d %H:%M"),
+            time = datetime.fromtimestamp(x[0]).strftime("%Y-%m-%d %H:%M"),
             pokemonid = str(x[1]),
             pokemonname = POKEMON_NAMES[x[1]]
         )) for x in spawndata]
