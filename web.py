@@ -24,6 +24,7 @@ REQUIRED_SETTINGS = (
     'SCAN_RADIUS',
     'MAP_PROVIDER_URL',
     'MAP_PROVIDER_ATTRIBUTION',
+    'DISABLE_WORKERS',
 )
 for setting_name in REQUIRED_SETTINGS:
     if not hasattr(config, setting_name):
@@ -124,21 +125,22 @@ def get_worker_markers():
     # Worker start points
     for worker_no, worker_points in enumerate(points):
         coords = utils.get_start_coords(worker_no)
-        markers.append({
-            'lat': coords[0],
-            'lon': coords[1],
-            'type': 'worker',
-            'worker_no': worker_no,
-        })
-        # Circles
-        for i, point in enumerate(worker_points):
+        if (worker_no not in config.DISABLE_WORKERS):
             markers.append({
-                'lat': point[0],
-                'lon': point[1],
-                'type': 'worker_point',
+                'lat': coords[0],
+                'lon': coords[1],
+                'type': 'worker',
                 'worker_no': worker_no,
-                'point_no': i,
             })
+            # Circles
+            for i, point in enumerate(worker_points):
+                markers.append({
+                    'lat': point[0],
+                    'lon': point[1],
+                    'type': 'worker_point',
+                    'worker_no': worker_no,
+                    'point_no': i,
+                })
     return markers
 
 
@@ -216,6 +218,7 @@ def report_single(pokemon_id):
         'map_center': utils.get_map_center(),
         'zoom': 13,
     }
+
     session.close()
     return render_template(
         'report_single.html',
@@ -298,6 +301,15 @@ def get_spawnpoint_text(spawn_id):
         content2 = "".join(stringlist2),
         tabletail = "</table>")
 
+@app.route('/report/heatmap/time_based')
+def report_time_based_heatmap():
+    session = db.Session()
+    pokemon_id = request.args.get('id')
+    time_data = db.get_spawns_per_minute(session, pokemon_id)
+    
+    session.close()
+
+    return json.dumps(time_data)
 
 if __name__ == '__main__':
     args = get_args()

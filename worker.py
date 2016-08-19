@@ -30,6 +30,7 @@ REQUIRED_SETTINGS = (
     'ACCOUNTS',
     'SCAN_RADIUS',
     'SCAN_DELAY',
+    'DISABLE_WORKERS',
 )
 for setting_name in REQUIRED_SETTINGS:
     if not hasattr(config, setting_name):
@@ -43,6 +44,8 @@ local_data = threading.local()
 class MalformedResponse(Exception):
     """Raised when server response is malformed"""
 
+class BannedAccount(Exception):
+    """Raised when account is banned"""
 
 def configure_logger(filename='worker.log'):
     logging.basicConfig(
@@ -94,13 +97,13 @@ class Slave(threading.Thread):
         self.cycle = 1
         self.error_code = None
 
-        service = config.ACCOUNTS[self.worker_no][2]
+        username, password, service = utils.get_worker_account(self.worker_no)
         while True:
             try:
                 loginsuccess = self.api.login(
+                    username=username,
+                    password=password,
                     provider=service,
-                    username=config.ACCOUNTS[self.worker_no][0],
-                    password=config.ACCOUNTS[self.worker_no][1],
                 )
                 if not loginsuccess:
                     self.error_code = 'LOGIN FAIL'
@@ -141,6 +144,11 @@ class Slave(threading.Thread):
                 logger.warning('Malformed response received!')
                 self.error_code = 'RESTART'
                 self.restart()
+                return
+            except BannedAccount:
+                self.error_code = 'BANNED?'
+                self.restart(30, 90)
+                return
             except Exception:
                 logger.exception('A wild exception appeared!')
                 self.error_code = 'EXCEPTION'
@@ -181,6 +189,9 @@ class Slave(threading.Thread):
             if not isinstance(response_dict, dict):
                 logger.warning('Response: %s', response_dict)
                 raise MalformedResponse
+            if response_dict['status_code'] == 3:
+                logger.warning('Account banned')
+                raise BannedAccount
             responses = response_dict.get('responses')
             if not responses:
                 logger.warning('Response: %s', response_dict)
@@ -290,6 +301,11 @@ class Slave(threading.Thread):
         self.error_code = 'KILLED'
         self.running = False
 
+    def disable(self):
+        """Marks worker as disabled"""
+        self.error_code = 'DISABLED'
+        self.running = False
+
 
 def get_status_message(workers, count, start_time, points_stats):
     messages = [workers[i].status.ljust(20) for i in range(count)]
@@ -321,8 +337,11 @@ def start_worker(worker_no, points):
         worker_no=worker_no,
         points=points
     )
-    worker.daemon = True
-    worker.start()
+    if (worker_no not in config.DISABLE_WORKERS):
+        worker.daemon = True
+        worker.start()
+    else:
+        worker.disable()
     workers[worker_no] = worker
 
 

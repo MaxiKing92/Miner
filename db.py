@@ -7,7 +7,7 @@ from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
-
+from sqlalchemy.sql.expression import func   
 
 try:
     import config
@@ -253,6 +253,23 @@ def get_sightings(session):
 
 
 def get_forts(session):
+    if get_engine_name(session) == 'sqlite':
+        # SQLite version is slooooooooooooow when compared to MySQL
+        where = '''
+            WHERE fs.fort_id || '-' || fs.last_modified IN (
+                SELECT fort_id || '-' || MAX(last_modified)
+                FROM fort_sightings
+                GROUP BY fort_id
+            )
+        '''
+    else:
+        where = '''
+            WHERE (fs.fort_id, fs.last_modified) IN (
+                SELECT fort_id, MAX(last_modified)
+                FROM fort_sightings
+                GROUP BY fort_id
+            )
+        '''
     query = session.execute('''
         SELECT
             fs.fort_id,
@@ -265,11 +282,8 @@ def get_forts(session):
             f.lon
         FROM fort_sightings fs
         JOIN forts f ON f.id=fs.fort_id
-        LEFT JOIN fort_sightings fs2
-            ON fs.fort_id=fs2.fort_id
-            AND fs.last_modified < fs2.last_modified
-        WHERE fs2.last_modified IS NULL
-    ''')
+        {where}
+    '''.format(where=where))
     return query.fetchall()
 
 
@@ -406,6 +420,58 @@ def get_spawns_per_hour(session, pokemon_id):
     return results
 
 
+def get_spawns_per_minute(session, pokemon_id=None):
+    # -90000 is 15 min, so the spawn time
+    if get_engine_name(session) == 'sqlite':
+        ts_hour = 'STRFTIME("%H", expire_timestamp)'
+        ts_minute= 'STRFTIME("%M", expire_timestamp-90000)'
+    else:
+        ts_hour = 'HOUR(FROM_UNIXTIME(expire_timestamp-90000))'
+        ts_minute = 'MINUTE(FROM_UNIXTIME(expire_timestamp-90000))'
+
+    if pokemon_id:
+        filter_for_pokemon = 'WHERE pokemon_id = ' + pokemon_id
+    else:
+        filter_for_pokemon = ''
+
+    query = session.execute('''
+        SELECT
+            lat,
+            lon,
+            {ts_hour} AS ts_hour,
+            {ts_minute} AS ts_minute,
+            COUNT(*) AS how_many
+        FROM sightings
+        {filter_for_pokemon}
+        GROUP BY
+            lat,
+            lon,
+            ts_hour,
+            ts_minute
+        ORDER BY
+            lat,
+            lon,
+            ts_hour,
+            ts_minute
+    '''.format(
+        filter_for_pokemon=filter_for_pokemon,
+        ts_hour=ts_hour,
+        ts_minute=ts_minute,
+        report_since=get_since_query_part(where=False)
+    ))
+    results = [[] for x in range(0,60*24)]
+    for elem in query.fetchall():
+        if elem['ts_hour'] and elem['ts_minute']:
+            hour = elem['ts_hour']
+            minute = elem['ts_minute']
+            results[hour*60+minute].append({
+                'lat': float(elem['lat']),
+                'lng': float(elem['lon']),
+                'weight': int(elem['how_many'])
+            })
+    return results
+
+
 def get_total_spawns_count(session, pokemon_id):
     query = session.execute('''
         SELECT COUNT(id)
@@ -421,11 +487,12 @@ def get_total_spawns_count(session, pokemon_id):
 
 
 def get_all_spawn_coords(session, pokemon_id=None):
-    points = session.query(Sighting.lat, Sighting.lon)
+    points = session.query(Sighting.lat, Sighting.lon, func.count())
     if pokemon_id:
         points = points.filter(Sighting.pokemon_id == int(pokemon_id))
     if config.REPORT_SINCE:
         points = points.filter(Sighting.expire_timestamp > get_since())
+    points = points.group_by(Sighting.lat, Sighting.lon)
     return points.all()
 
 def get_spawnpoints_with_spawnid(session):
