@@ -523,6 +523,7 @@ def get_spawnpoint_data(session, spawn_id):
         SELECT normalized_timestamp, pokemon_id
         FROM sightings
         WHERE spawn_id = "{sid}"
+        GROUP BY normalized_timestamp
         ORDER BY normalized_timestamp ASC;
     '''.format(
         sid = spawn_id
@@ -535,10 +536,11 @@ def get_spawnpoint_data(session, spawn_id):
     
 def get_nr_pokemon_for_spawnpoint(session, spawn_id):
     query = (''' 
-        SELECT pokemon_id, count(*) AS nrPoke
-        FROM sightings
-        WHERE spawn_id = "{sid}"
-        GROUP BY pokemon_id
+        SELECT s.pokemon_id, count(*) AS nrPoke                                                                                                                                           FROM (
+            SELECT pokemon_id
+            FROM sightings                                                                                                                                                        
+            WHERE spawn_id = "{sid}"                                                                                                                                                          GROUP BY pokemon_id,normalized_timestamp) s                                                                                                                           
+        GROUP BY s.pokemon_id
         ORDER BY nrPoke DESC;
     '''.format(
         sid = spawn_id
