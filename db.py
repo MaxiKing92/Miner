@@ -546,3 +546,61 @@ def get_known_spawnpoints(session):
         results.append((float(x[0]), float(x[1])))
     return results
 
+
+def get_spawnpoints_with_spawnid(session):
+    query = ('''
+        SELECT lat, lon, spawn_id
+        FROM sightings
+        WHERE
+            lat >= {lat_start} AND
+            lat <= {lat_end} AND
+            lon >= {lon_start} AND
+            lon <= {lon_end}
+        GROUP BY lat,lon;
+    '''.format(
+        lat_start=min(config.MAP_START[0], config.MAP_END[0]),
+        lat_end=max(config.MAP_START[0], config.MAP_END[0]),
+        lon_start=min(config.MAP_START[1], config.MAP_END[1]),
+        lon_end=max(config.MAP_START[1], config.MAP_END[1])
+    ))
+    query = session.execute(query)
+    results = []
+    for x in query.fetchall():
+        results.append((float(x[0]), float(x[1]), x[2]))
+    return results
+
+
+def get_spawnpoint_data(session, spawn_id):
+    query = ('''
+        SELECT normalized_timestamp, pokemon_id
+        FROM sightings
+        WHERE spawn_id = "{sid}"
+        GROUP BY normalized_timestamp
+        ORDER BY normalized_timestamp ASC;
+    '''.format(
+        sid = spawn_id
+    ))
+    query = session.execute(query)
+    results = []
+    for x in query.fetchall():
+        results.append(( x[0] , x[1] ))
+    return results
+    
+def get_nr_pokemon_for_spawnpoint(session, spawn_id):
+    query = (''' 
+        SELECT s.pokemon_id, count(*) AS nrPoke                                                                                                                                           FROM (
+            SELECT pokemon_id
+            FROM sightings                                                                                                                                                        
+            WHERE spawn_id = "{sid}"                                                                                                                                                          GROUP BY pokemon_id,normalized_timestamp) s                                                                                                                           
+        GROUP BY s.pokemon_id
+        ORDER BY nrPoke DESC;
+    '''.format(
+        sid = spawn_id
+    ))
+    query = session.execute(query)
+    results = []
+    for x in query.fetchall():
+        results.append(( x[0] , x[1] ))
+    return results
+
+
