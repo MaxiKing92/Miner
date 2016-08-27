@@ -8,3 +8,15 @@ templates/footer.html
 *.dll
 *.dylib
 *.data
+locs.txt
+
+rates.txt
+
+spawnmarkers.json
+
+src/pgoapi/
+
+src/pip-delete-this-directory.txt
+
+
+biomecells.json
