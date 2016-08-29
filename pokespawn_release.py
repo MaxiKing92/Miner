@@ -18,6 +18,7 @@ import random
 
 from datetime import datetime
 from geopy.geocoders import GoogleV3
+from geopy.distance import vincenty
 from telegram.error import NetworkError
 from time import sleep
 from importlib import reload
@@ -259,12 +260,14 @@ def PokListener(bot):
                         name = pokemon_names[str(pokemon.pokemon_id)]
                         datestr = datetime.fromtimestamp(pokemon.expire_timestamp)
                         dateoutput = datestr.strftime("%H:%M:%S")
-                        
+
+                        home = geolocator.geocode("Kaerntner Strasse 8 26131 Oldenburg Germany")                        
+                        homedis = vincenty((pokemon.lat, pokemon.lon), (home.latitude, home.longitude))
                         location = geolocator.reverse((pokemon.lat, pokemon.lon), True)
                         useloc = location.address.split(', 261') #this is used to trim the location. If string is >140 chars, Twitter API will crash. Change to the first digits of your ZIP code. If ZIP code is 23002, i'll put 230
-                        print( '[-] A ' + name + ' was found in ' + useloc[0] + '. ' + str(round(time_remaining)) + 's remaining.') 
+                        print( '[-] A ' + name + ' was found ' + str(round(homedis.meters)) + 'm away from home in ' + useloc[0] + '. ' + str(round(time_remaining)) + 's remaining.') 
                         allPokList.append(pokemon.spawn_id)
-                        message = EmojiFromRank(PokIDtoStars(pokemon.pokemon_id)) + ' <b>' + name + '</b> was found in <a href="https://www.google.com/maps/dir/Current+Location/'+ pokemon.lat +',' + pokemon.lon +'">' + useloc[0] + '</a>. Disappear time: <b>' + dateoutput + '</b>'
+                        message = EmojiFromRank(PokIDtoStars(pokemon.pokemon_id)) + ' <b>' + name + '</b> was found <b>' + str(round(homedis.meters)) + '</b>m away from home in <a href="https://www.google.com/maps/dir/Current+Location/'+ pokemon.lat +',' + pokemon.lon +'">' + useloc[0] + '</a>. Disappear time: <b>' + dateoutput + '</b>'
                         
                         bot.sendMessage('@pokemon_oldenburg', message, 'html') # the @name of your channel/group. The bot MUST be added as administrator if channel.
                         bot.sendLocation('@pokemon_oldenburg', pokemon.lat, pokemon.lon) # same, the @name of your channel/group where the location will be send to.
